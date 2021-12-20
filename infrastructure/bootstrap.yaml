@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Bootstrap template which deploys an S3 bucket and ECR
+
+Resources: 
+  
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+
+  DeploymentEcr:
+    Type: AWS::ECR::Repository
+    Properties: 
+      LifecyclePolicy: 
+        LifecyclePolicyText: |
+          {
+              "rules": [
+                  {
+                      "rulePriority": 1,
+                      "description": "Expire images older than 14 days",
+                      "selection": {
+                          "tagStatus": "untagged",
+                          "countType": "sinceImagePushed",
+                          "countUnit": "days",
+                          "countNumber": 14
+                      },
+                      "action": {
+                          "type": "expire"
+                      }
+                  }
+              ]
+          }
+      RepositoryName: django-serverless
+
+  DeploymentBucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: DeploymentBucketName
+      Type: String
+      Value: !Ref DeploymentBucket
+      Description: Bootstrap bucket name.
+
+  DeploymentEcrArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: DeploymentEcrArn
+      Type: String
+      Value: !GetAtt DeploymentEcr.Arn
+      Description: Bootstrap ECR ARN.
+
+  DeploymentEcrUriParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: DeploymentEcrUri
+      Type: String
+      Value: !GetAtt DeploymentEcr.RepositoryUri
+      Description: Bootstrap ECR URI.

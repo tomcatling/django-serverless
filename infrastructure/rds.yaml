@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: RDS Aurora Serverless PostgreSQL Template
+
+Parameters:
+
+  RdsMasterUserName:
+    Type: String
+    Default: admin
+    Description: Database admin user name for RDS
+
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+  Subnets:
+    Type: String
+    Description: Choose which subnets RDS should be deployed to
+  
+  SecurityGroup:
+    Type: String
+    Description: Security group for RDS Cluster
+
+Resources:
+
+  RdsSecretKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: "Allow"
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  RdsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      KmsKeyId: !Ref RdsSecretKey
+      GenerateSecretString:
+        SecretStringTemplate: !Join [ '', [ '{"RDS_USERNAME": "', !Ref RdsMasterUserName, '"}' ] ]
+        GenerateStringKey: 'RDS_PASSWORD'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  RdsCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: 
+        Ref: RdsMasterUserName
+      MasterUserPassword: 
+        !Join [ '', [ '{{resolve:secretsmanager:', !Ref RdsSecret, ':SecretString:RDS_PASSWORD}}' ] ]
+      DatabaseName: !Sub ${EnvironmentName}-RdsCluster
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      ScalingConfiguration:
+        AutoPause: true
+        MaxCapacity: 8
+        MinCapacity: 2
+        SecondsUntilAutoPause: 300
+      DBSubnetGroupName:
+        Ref: RdsSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroup
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: String
+      DBSubnetGroupName: !Sub ${EnvironmentName}-RdsSubnetGroup
+      SubnetIds: !Split [",", !Ref Subnets]
+      Tags: 
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-RdsSubnetGroup
